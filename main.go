@@ -10,7 +10,7 @@ import (
 
 var printf = fmt.Printf
 
-var clientList = make(map[net.Addr]net.Conn)
+var clientList = make(map[net.Addr]ClientUnit)
 
 func main() {
 	_, err := net.ResolveTCPAddr("tcp", ":10080")
@@ -36,7 +36,12 @@ func main() {
 			panic(err)
 		}
 		address := connection.RemoteAddr()
-
+		// 新規接続クライアントオブジェクトを作成
+		var client = ClientUnit{
+			clientName: "",
+			connection: connection,
+			address:    address,
+		}
 		// 接続元クライアント管理
 		var isExist = false
 		for addr := range clientList {
@@ -46,21 +51,29 @@ func main() {
 				break
 			}
 		}
+
 		if isExist == false {
-			clientList[address] = connection
+			clientList[address] = client
 		}
 		printf("%v\n", clientList)
 		//connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 
-		go handlingConnection(connection)
+		go handlingConnection(client)
 	}
 }
 
-func handlingConnection(c net.Conn) {
+// 接続してきたクライアントを管理する構造体
+type ClientUnit struct {
+	clientName string
+	connection net.Conn
+	address    net.Addr
+}
 
+func handlingConnection(clientUnit ClientUnit) error {
+	var c net.Conn = clientUnit.connection
 	printf("%v", c.RemoteAddr())
 	var fromAddress string
-	c.Write([]byte("--------->接続を開始しました!\n: "))
+	c.Write([]byte("あなたのお名前を最初に入力してください\n"))
 	printf("読み取り開始\n")
 	c.SetReadDeadline(time.Now().Add(1 * time.Second))
 	for {
@@ -151,24 +164,32 @@ func handlingConnection(c net.Conn) {
 			continue
 		}
 		recievedMessage := string(stackBuffer)
+		// ClientUnit構造体のclientNameが空の場合は、クライアント名を登録
+		if len(clientUnit.clientName) == 0 {
+			// 名前を設定
+			clientUnit.clientName = recievedMessage
+			c.Write([]byte("ようこそ" + clientUnit.clientName + "さん\n"))
+			continue
+		}
 		//printf("%v\n", stackBuffer)
 		//printf("recievedMessage => <%s>\n", recievedMessage)
 		//printf("recievedMessage => <%v>\n", recievedMessage)
 		//panic("!!!!!!!!!!!!!!")
+
+		// exit or end を入力されたときはクライアントの接続を切断
 		if recievedMessage == "exit" || recievedMessage == "end" {
 			printf("クライアントリストから削除")
-		}
-		if recievedMessage == "exit\n" || recievedMessage == "end" {
-			printf("クライアントリストから削除")
-			c.Write([]byte("Goodbye\n"))
-			err := c.Close()
-			if err != nil {
+			c.Write([]byte("ご利用ありがとうございました!!\n"))
+			if err := c.Close(); err != nil {
 				panic(err)
 			}
+			return nil
 		} else {
 			// Print the request to the console
 			printf("接続元アドレス: %s\n", fromAddress)
 			printf("受信したデータ: %s\n", string(stackBuffer))
+			var reply string = fmt.Sprintf("%sさんが発言しました: %s\n", clientUnit.clientName, string(stackBuffer))
+			c.Write([]byte(reply))
 		}
 		thanksBuffer := []byte("Thanks for your message\n")
 		if _, err := c.Write(thanksBuffer); err != nil {
@@ -176,7 +197,5 @@ func handlingConnection(c net.Conn) {
 		} else {
 			printf("メッセージを受信しました")
 		}
-		//}
-
 	}
 }
