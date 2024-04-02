@@ -10,6 +10,36 @@ import (
 
 var printf = fmt.Printf
 
+// 接続してきたクライアントを管理する構造体
+type ClientUnit struct {
+	clientName string
+	connection net.Conn
+	address    net.Addr
+}
+
+type ClientManager struct {
+	clientList map[net.Addr]ClientUnit
+}
+
+func (cm *ClientManager) addClient(client ClientUnit) {
+	cm.clientList[client.address] = client
+}
+func (cm *ClientManager) removeClient(client ClientUnit) {
+	delete(cm.clientList, client.address)
+}
+func (cm *ClientManager) exists(client ClientUnit) bool {
+	if _, ok := cm.clientList[client.address]; ok {
+		return ok
+	} else {
+		return false
+	}
+}
+
+// TCPクライアントを管理する構造体を作成
+var clientManager = ClientManager{
+	clientList: make(map[net.Addr]ClientUnit),
+}
+
 var clientList = make(map[net.Addr]ClientUnit)
 
 func main() {
@@ -42,31 +72,14 @@ func main() {
 			connection: connection,
 			address:    address,
 		}
-		// 接続元クライアント管理
-		var isExist = false
-		for addr := range clientList {
-			// 既にクライアントリストに登録されているか確認
-			if addr.String() == address.String() {
-				isExist = true
-				break
-			}
-		}
 
-		if isExist == false {
-			clientList[address] = client
+		isExists := clientManager.exists(client)
+		if isExists == false {
+			clientManager.addClient(client)
 		}
-		printf("%v\n", clientList)
-		//connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 
 		go handlingConnection(client)
 	}
-}
-
-// 接続してきたクライアントを管理する構造体
-type ClientUnit struct {
-	clientName string
-	connection net.Conn
-	address    net.Addr
 }
 
 func handlingConnection(clientUnit ClientUnit) error {
@@ -180,6 +193,8 @@ func handlingConnection(clientUnit ClientUnit) error {
 		if recievedMessage == "exit" || recievedMessage == "end" {
 			printf("クライアントリストから削除")
 			c.Write([]byte("ご利用ありがとうございました!!\n"))
+			// クライアントリストから削除
+			clientManager.removeClient(clientUnit)
 			if err := c.Close(); err != nil {
 				panic(err)
 			}
