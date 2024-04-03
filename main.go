@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"reflect"
 	"time"
 )
 
@@ -14,7 +15,6 @@ var printf = fmt.Printf
 type ClientUnit struct {
 	clientName string
 	connection net.Conn
-	address    net.Addr
 }
 
 type ClientManager struct {
@@ -22,13 +22,15 @@ type ClientManager struct {
 }
 
 func (cm *ClientManager) addClient(client ClientUnit) {
-	cm.clientList[client.address] = client
+	fmt.Printf("---------%v---------------", reflect.TypeOf(client.connection.RemoteAddr()))
+	fmt.Printf("---------%v---------------", client.connection.RemoteAddr())
+	cm.clientList[client.connection.RemoteAddr()] = client
 }
 func (cm *ClientManager) removeClient(client ClientUnit) {
-	delete(cm.clientList, client.address)
+	delete(cm.clientList, client.connection.RemoteAddr())
 }
 func (cm *ClientManager) exists(client ClientUnit) bool {
-	if _, ok := cm.clientList[client.address]; ok {
+	if _, ok := cm.clientList[client.connection.RemoteAddr()]; ok {
 		return ok
 	} else {
 		return false
@@ -39,8 +41,6 @@ func (cm *ClientManager) exists(client ClientUnit) bool {
 var clientManager = ClientManager{
 	clientList: make(map[net.Addr]ClientUnit),
 }
-
-var clientList = make(map[net.Addr]ClientUnit)
 
 func main() {
 	_, err := net.ResolveTCPAddr("tcp", ":10080")
@@ -65,12 +65,10 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		address := connection.RemoteAddr()
 		// 新規接続クライアントオブジェクトを作成
 		var client = ClientUnit{
 			clientName: "",
 			connection: connection,
-			address:    address,
 		}
 
 		isExists := clientManager.exists(client)
@@ -183,6 +181,12 @@ func handlingConnection(clientUnit ClientUnit) error {
 			clientUnit.clientName = recievedMessage
 			c.Write([]byte("ようこそ" + clientUnit.clientName + "さん\n"))
 			continue
+		} else {
+			for _, client := range clientManager.clientList {
+				if client.connection.RemoteAddr() != clientUnit.connection.RemoteAddr() {
+					client.connection.Write([]byte(clientUnit.clientName + "さんが発言しました: " + recievedMessage + "\n"))
+				}
+			}
 		}
 		//printf("%v\n", stackBuffer)
 		//printf("recievedMessage => <%s>\n", recievedMessage)
@@ -203,8 +207,8 @@ func handlingConnection(clientUnit ClientUnit) error {
 			// Print the request to the console
 			printf("接続元アドレス: %s\n", fromAddress)
 			printf("受信したデータ: %s\n", string(stackBuffer))
-			var reply string = fmt.Sprintf("%sさんが発言しました: %s\n", clientUnit.clientName, string(stackBuffer))
-			c.Write([]byte(reply))
+			//var reply string = fmt.Sprintf("%sさんが発言しました: %s\n", clientUnit.clientName, string(stackBuffer))
+			//c.Write([]byte(reply))
 		}
 		thanksBuffer := []byte("Thanks for your message\n")
 		if _, err := c.Write(thanksBuffer); err != nil {
