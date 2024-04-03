@@ -180,6 +180,13 @@ func handlingConnection(clientUnit ClientUnit) error {
 			// 名前を設定
 			clientUnit.clientName = recievedMessage
 			c.Write([]byte("ようこそ" + clientUnit.clientName + "さん\n"))
+
+			// 発信者以外のユーザーに接続開始した旨を通知
+			for address, value := range clientManager.clientList {
+				if address != clientUnit.connection.RemoteAddr() {
+					value.connection.Write([]byte(clientUnit.clientName + "さんが入室しました\n"))
+				}
+			}
 			continue
 		} else {
 			for _, client := range clientManager.clientList {
