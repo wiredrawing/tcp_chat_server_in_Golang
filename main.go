@@ -189,8 +189,8 @@ func handlingConnection(clientUnit ClientUnit) error {
 			}
 			continue
 		} else {
-			for _, client := range clientManager.clientList {
-				if client.connection.RemoteAddr() != clientUnit.connection.RemoteAddr() {
+			for address, client := range clientManager.clientList {
+				if address != clientUnit.connection.RemoteAddr() {
 					client.connection.Write([]byte(clientUnit.clientName + "さんが発言しました: " + recievedMessage + "\n"))
 				}
 			}
