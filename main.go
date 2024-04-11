@@ -48,55 +48,59 @@ var clientManager = ClientManager{
 	clientList: make(map[net.Addr]*ClientUnit),
 }
 
+func fetchReceiveBufferFromServer(connection *net.TCPConn) {
+	const ByteSize = 1024
+	for {
+		// 読み取り開始
+		//fmt.Println("TCPサーバーからの読み取り開始---")
+		readBytes := make([]byte, ByteSize)
+		_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
+		for {
+			buffer := make([]byte, ByteSize)
+			size, err := connection.Read(buffer)
+			if err != nil {
+				// timeoutエラーを検出
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					//fmt.Printf("Timeout時間を延慶")
+					_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
+				} else {
+					panic(err)
+				}
+			}
+			// 読み取ったバイト数のみスライスする
+			buffer = buffer[:size]
+			readBytes = append(readBytes, buffer...)
+			if (size < ByteSize) && (size > 0) {
+				break
+			}
+		}
+		fmt.Printf("サーバーからのレスポンス-- %v", string(readBytes))
+	}
+	connection.Write([]byte("TCPクライアントから接続 -------------------------->"))
+}
+
 func main() {
 	// コマンドライン引数を取得
-	asClient := flag.Int("client", 0, "TCPクライアントとして実行する場合")
+	asClient := flag.Bool("client", false, "TCPクライアントとして実行する場合")
+	ipAddress := flag.String("address", "127.0.0.1", "接続先あるいはListen先のIPアドレス")
+	portNumber := flag.Int("port", 10080, "接続先あるいはListen先のポート番号")
 	flag.Parse()
 
-	if (*asClient) == 1 {
+	if (*asClient) == true {
 		// 読み取らせるマックスbyte数
-		const BYTE_SIZE = 1024
+
 		fmt.Println("TCPクライアントの起動---")
 		// TCPクライアントとして起動させた場合
 		addr := &net.TCPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: 10080,
+			IP:   net.ParseIP(*ipAddress),
+			Port: *portNumber,
 		}
 		connection, err := net.DialTCP("tcp", nil, addr)
 		if err != nil {
 			panic(err)
 		}
 
-		fetchReceiveBufferFromServer := func() {
-			for {
-				// 読み取り開始
-				//fmt.Println("TCPサーバーからの読み取り開始---")
-				readBytes := make([]byte, BYTE_SIZE)
-				_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
-				for {
-					buffer := make([]byte, BYTE_SIZE)
-					size, err := connection.Read(buffer)
-					if err != nil {
-						// timeoutエラーを検出
-						if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-							//fmt.Printf("Timeout時間を延慶")
-							_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
-						} else {
-							panic(err)
-						}
-					}
-					// 読み取ったバイト数のみスライスする
-					buffer = buffer[:size]
-					readBytes = append(readBytes, buffer...)
-					if (size < BYTE_SIZE) && (size > 0) {
-						break
-					}
-				}
-				fmt.Printf("サーバーからのレスポンス-- %v", string(readBytes))
-			}
-			connection.Write([]byte("TCPクライアントから接続 -------------------------->"))
-		}
-		go fetchReceiveBufferFromServer()
+		go fetchReceiveBufferFromServer(connection)
 
 		for {
 			var prompt = " >>> "
@@ -114,6 +118,8 @@ func main() {
 
 	} else {
 		tcp, err := net.ResolveTCPAddr("tcp", ":10080")
+		tcp.IP = net.ParseIP(*ipAddress)
+		tcp.Port = *portNumber
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -234,7 +240,8 @@ func handlingConnection(clientUnit *ClientUnit) error {
 		} else {
 			for address, client := range clientManager.clientList {
 				if address != clientUnit.connection.RemoteAddr() {
-					client.connection.Write([]byte(clientUnit.clientName + "さんが発言しました: " + recievedMessage + "\n"))
+					formattedMessage := colorWrapping("33", clientUnit.clientName+"さんが発言しました: "+recievedMessage+"\n")
+					client.connection.Write([]byte(formattedMessage))
 				}
 			}
 		}
@@ -263,4 +270,8 @@ func handlingConnection(clientUnit *ClientUnit) error {
 			printf("メッセージを受信しました")
 		}
 	}
+}
+
+func colorWrapping(colorCode string, text string) string {
+	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
