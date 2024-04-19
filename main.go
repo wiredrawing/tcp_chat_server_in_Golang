@@ -8,35 +8,32 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
+	"wiredrawing/go/socket-application/clientunit"
 )
 
 var printf = fmt.Printf
 
-// 接続してきたクライアントを管理する構造体
-type ClientUnit struct {
-	clientName string
-	connection net.Conn
-}
-
 type ClientManager struct {
-	clientList map[net.Addr]*ClientUnit
+	clientList map[net.Addr]*clientunit.ClientUnit
 }
 
-func (cm *ClientManager) addClient(refClient *ClientUnit) (bool, error) {
-	var address net.Addr = refClient.connection.RemoteAddr()
+func (cm *ClientManager) addClient(refClient *clientunit.ClientUnit) (bool, error) {
+	var address net.Addr = refClient.Connection.RemoteAddr()
 	if _, ok := cm.clientList[address]; ok != true {
 		cm.clientList[address] = refClient
 		return true, nil
 	}
 	return false, errors.New("クライアントは既に存在しています")
 }
-func (cm *ClientManager) removeClient(client *ClientUnit) {
-	delete(cm.clientList, client.connection.RemoteAddr())
+func (cm *ClientManager) removeClient(client *clientunit.ClientUnit) {
+	delete(cm.clientList, client.Connection.RemoteAddr())
 }
-func (cm *ClientManager) exists(client *ClientUnit) bool {
-	if _, ok := cm.clientList[client.connection.RemoteAddr()]; ok {
+func (cm *ClientManager) exists(client *clientunit.ClientUnit) bool {
+	if _, ok := cm.clientList[client.Connection.RemoteAddr()]; ok {
 		return ok
 	} else {
 		return false
@@ -45,7 +42,7 @@ func (cm *ClientManager) exists(client *ClientUnit) bool {
 
 // TCPクライアントを管理する構造体を作成
 var clientManager = ClientManager{
-	clientList: make(map[net.Addr]*ClientUnit),
+	clientList: make(map[net.Addr]*clientunit.ClientUnit),
 }
 
 func fetchReceiveBufferFromServer(connection *net.TCPConn) {
@@ -59,9 +56,21 @@ func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 			buffer := make([]byte, ByteSize)
 			size, err := connection.Read(buffer)
 			if err != nil {
+
+				//var ms MyStruct = MyStruct{}
+				//
+				//var a myInterface = ms
+				//fmt.Println("reflect.TypeOf(a) => ", reflect.TypeOf(a))
+				//// s, ok := a.("具体的な型名")
+				//s, ok := a.(MyStruct)
+				//
+				//fmt.Println("reflect.TypeOf(ok) => ", reflect.TypeOf(ok))
+				//fmt.Println("reflect.TypeOf(s) => ", reflect.TypeOf(s))
+
 				// timeoutエラーを検出
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					//fmt.Printf("Timeout時間を延慶")
+					fmt.Printf("reflect.TypeOf(err) => %v\n", reflect.TypeOf(err))
 					_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 				} else {
 					panic(err)
@@ -90,13 +99,53 @@ func main() {
 		// 読み取らせるマックスbyte数
 
 		fmt.Println("TCPクライアントの起動---")
+
+		// IPを直接指定させる
+		fmt.Println("接続先のIPアドレスを入力してください...")
+		for {
+			scanner := bufio.NewScanner(os.Stdin)
+			if (*scanner).Scan() {
+				var connectToIp string = scanner.Text()
+				// IPアドレスの形式チェック
+				var ip net.IP = net.ParseIP(connectToIp)
+				if (ip.String() == connectToIp) && (ip.To4() != nil) {
+					fmt.Printf("接続先を[%s]に確定しました。\n", connectToIp)
+					*ipAddress = connectToIp
+					break
+				} else {
+					fmt.Println("IPアドレスの形式が不正です。再度入力してください...")
+					continue
+				}
+			}
+		}
+		fmt.Println("接続先のポート番号を入力してください...")
+		for {
+			// 標準入力から文字列を取得する
+			scanner := bufio.NewScanner(os.Stdin)
+			var result bool = scanner.Scan()
+			if result == true {
+				var input string = scanner.Text()
+				if ip, err := strconv.Atoi(input); err == nil {
+					if (ip >= 1024) && (ip <= 65535) {
+						fmt.Printf("ポート番号を[%d]に確定しました。\n", ip)
+						*portNumber = ip
+						break
+					}
+				} else {
+					fmt.Printf("エラー: %v\n", err)
+				}
+				fmt.Println("妥当なポート番号を入力して下さい")
+			}
+		}
 		// TCPクライアントとして起動させた場合
 		addr := &net.TCPAddr{
 			IP:   net.ParseIP(*ipAddress),
 			Port: *portNumber,
 		}
+
 		connection, err := net.DialTCP("tcp", nil, addr)
 		if err != nil {
+			fmt.Printf("TCPサーバー[%s:%s]接続エラー: %v\n", *ipAddress, *portNumber, err)
 			panic(err)
 		}
 
@@ -117,7 +166,49 @@ func main() {
 		}
 
 	} else {
-		tcp, err := net.ResolveTCPAddr("tcp", ":10080")
+		fmt.Println("> Starting TCP server...")
+		fmt.Println("> Started to accept the connection from the client...")
+
+		fmt.Println("ListenするIPアドレスを入力してください...")
+		for {
+			scanner := bufio.NewScanner(os.Stdin)
+			var result bool = scanner.Scan()
+			if result == true {
+				var input string = scanner.Text()
+				var ip net.IP = net.ParseIP(input)
+				fmt.Println(ip.String())
+				if (ip.String() == input) && (ip.To4() != nil) {
+					fmt.Printf("%sをListenします\n", input)
+					*ipAddress = input
+					break
+				} else {
+					fmt.Println("IPアドレスの形式が不正です。再度入力してください...")
+					continue
+				}
+			}
+		}
+
+		fmt.Println("Listenするポート番号を入力してください...")
+		for {
+			scanner := bufio.NewScanner(os.Stdin)
+			var result bool = scanner.Scan()
+			if result == true {
+				// String from console.
+				var input string = scanner.Text()
+				if port, err := strconv.Atoi(input); err == nil {
+					*portNumber = port
+					fmt.Printf("%dをListenします\n", port)
+					break
+				} else {
+					fmt.Printf("妥当なポート番号を入力してください\n")
+					fmt.Printf("エラー: %v\n", err)
+				}
+			}
+		}
+
+		hostName := fmt.Sprintf("%s:%d", *ipAddress, *portNumber)
+
+		tcp, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", *ipAddress, *portNumber))
 		tcp.IP = net.ParseIP(*ipAddress)
 		tcp.Port = *portNumber
 		if err != nil {
@@ -143,9 +234,10 @@ func main() {
 			}
 
 			// 新規接続クライアントオブジェクトを作成
-			var client *ClientUnit = new(ClientUnit)
-			client.clientName = ""
-			client.connection = connection
+			var client *clientunit.ClientUnit = new(clientunit.ClientUnit)
+			client.ClientName = ""
+			client.Connection = connection
+			fmt.Printf("client オブジェクト -> %v", client)
 
 			isExists := clientManager.exists(client)
 			fmt.Printf("isExists => %v\n", isExists)
@@ -154,13 +246,13 @@ func main() {
 			}
 			fmt.Printf("クライアントリストclientManager: %v\n", clientManager)
 			fmt.Printf("クライアントリストclientManager.clientList: %v\n", clientManager.clientList)
-			go handlingConnection(client)
+			go handlingConnection(client, hostName)
 		}
 	}
 }
 
-func handlingConnection(clientUnit *ClientUnit) error {
-	var c net.Conn = clientUnit.connection
+func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) error {
+	var c net.Conn = clientUnit.Connection
 	printf("%v", c.RemoteAddr())
 	c.Write([]byte("<< あなたのお名前を最初に入力してください >>\n"))
 	c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
@@ -215,7 +307,7 @@ func handlingConnection(clientUnit *ClientUnit) error {
 		if recievedMessage == "users" {
 			users := make([]string, len(clientManager.clientList))
 			for address, value := range clientManager.clientList {
-				s := fmt.Sprintf("[%s]:%s", address, value.clientName)
+				s := fmt.Sprintf("[%s]:%s", address, value.ClientName)
 				users = append(users, s)
 			}
 			fmt.Printf("接続中のユーザー: %v\n", users)
@@ -225,23 +317,23 @@ func handlingConnection(clientUnit *ClientUnit) error {
 			continue
 		}
 		// ClientUnit構造体のclientNameが空の場合は、クライアント名を登録
-		if len((*clientUnit).clientName) == 0 {
+		if len((*clientUnit).ClientName) == 0 {
 			// 名前を設定
-			(*clientUnit).clientName = recievedMessage
-			c.Write([]byte("ようこそ" + clientUnit.clientName + "さん\n"))
+			(*clientUnit).ClientName = recievedMessage
+			c.Write([]byte("ようこそ" + clientUnit.ClientName + "さん\n"))
 
 			// 発信者以外のユーザーに接続開始した旨を通知
 			for address, value := range clientManager.clientList {
-				if address != clientUnit.connection.RemoteAddr() {
-					value.connection.Write([]byte(clientUnit.clientName + "さんが入室しました\n"))
+				if address != clientUnit.Connection.RemoteAddr() {
+					value.Connection.Write([]byte(clientUnit.ClientName + "さんが入室しました\n"))
 				}
 			}
 			continue
 		} else {
 			for address, client := range clientManager.clientList {
-				if address != clientUnit.connection.RemoteAddr() {
-					formattedMessage := colorWrapping("33", clientUnit.clientName+"さんが発言しました: "+recievedMessage+"\n")
-					client.connection.Write([]byte(formattedMessage))
+				if address != clientUnit.Connection.RemoteAddr() {
+					formattedMessage := colorWrapping("33", clientUnit.ClientName+"さんが発言しました: "+recievedMessage+"\n")
+					client.Connection.Write([]byte(formattedMessage))
 				}
 			}
 		}
@@ -257,7 +349,7 @@ func handlingConnection(clientUnit *ClientUnit) error {
 			return nil
 		} else {
 			// Print the request to the console
-			printf("%s: %s\n", clientUnit.clientName, string(stackBuffer))
+			printf("%s: %s\n", clientUnit.ClientName, string(stackBuffer))
 			//printf("接続元アドレス: %s\n", fromAddress)
 			//printf("受信したデータ: %s\n", string(stackBuffer))
 			//var reply string = fmt.Sprintf("%sさんが発言しました: %s\n", clientUnit.clientName, string(stackBuffer))
