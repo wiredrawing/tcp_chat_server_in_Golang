@@ -8,11 +8,11 @@ import (
 	"log"
 	"net"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
 	"wiredrawing/go/socket-application/clientunit"
+	"wiredrawing/go/socket-application/server"
 )
 
 var printf = fmt.Printf
@@ -22,7 +22,7 @@ type ClientManager struct {
 }
 
 func (cm *ClientManager) addClient(refClient *clientunit.ClientUnit) (bool, error) {
-	var address net.Addr = refClient.Connection.RemoteAddr()
+	var address = refClient.Connection.RemoteAddr()
 	if _, ok := cm.clientList[address]; ok != true {
 		cm.clientList[address] = refClient
 		return true, nil
@@ -70,7 +70,7 @@ func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 				// timeoutエラーを検出
 				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					//fmt.Printf("Timeout時間を延慶")
-					fmt.Printf("reflect.TypeOf(err) => %v\n", reflect.TypeOf(err))
+					//fmt.Printf("reflect.TypeOf(err) => %v\n", reflect.TypeOf(err))
 					_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 				} else {
 					panic(err)
@@ -89,6 +89,15 @@ func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 }
 
 func main() {
+
+	// ログファイルを作成する
+	logFile, err := os.OpenFile("./log.dat", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Printf("ログファイルが作成できませんでした %v", err)
+		os.Exit(1)
+	}
+	log.SetOutput(logFile)
+
 	// コマンドライン引数を取得
 	asClient := flag.Bool("client", false, "TCPクライアントとして実行する場合")
 	ipAddress := flag.String("address", "127.0.0.1", "接続先あるいはListen先のIPアドレス")
@@ -105,9 +114,9 @@ func main() {
 		for {
 			scanner := bufio.NewScanner(os.Stdin)
 			if (*scanner).Scan() {
-				var connectToIp string = scanner.Text()
+				var connectToIp = scanner.Text()
 				// IPアドレスの形式チェック
-				var ip net.IP = net.ParseIP(connectToIp)
+				var ip = net.ParseIP(connectToIp)
 				if (ip.String() == connectToIp) && (ip.To4() != nil) {
 					fmt.Printf("接続先を[%s]に確定しました。\n", connectToIp)
 					*ipAddress = connectToIp
@@ -122,9 +131,9 @@ func main() {
 		for {
 			// 標準入力から文字列を取得する
 			scanner := bufio.NewScanner(os.Stdin)
-			var result bool = scanner.Scan()
+			var result = scanner.Scan()
 			if result == true {
-				var input string = scanner.Text()
+				var input = scanner.Text()
 				if ip, err := strconv.Atoi(input); err == nil {
 					if (ip >= 1024) && (ip <= 65535) {
 						fmt.Printf("ポート番号を[%d]に確定しました。\n", ip)
@@ -157,7 +166,7 @@ func main() {
 			scanner := bufio.NewScanner(os.Stdin)
 			result := scanner.Scan()
 			if result == true {
-				var input string = scanner.Text()
+				var input = scanner.Text()
 				// 入力したテキストをサーバーへ送信
 				if _, err := connection.Write([]byte(input)); err != nil {
 					panic(err)
@@ -172,10 +181,10 @@ func main() {
 		fmt.Println("ListenするIPアドレスを入力してください...")
 		for {
 			scanner := bufio.NewScanner(os.Stdin)
-			var result bool = scanner.Scan()
+			var result = scanner.Scan()
 			if result == true {
-				var input string = scanner.Text()
-				var ip net.IP = net.ParseIP(input)
+				var input = scanner.Text()
+				var ip = net.ParseIP(input)
 				fmt.Println(ip.String())
 				if (ip.String() == input) && (ip.To4() != nil) {
 					fmt.Printf("%sをListenします\n", input)
@@ -191,10 +200,10 @@ func main() {
 		fmt.Println("Listenするポート番号を入力してください...")
 		for {
 			scanner := bufio.NewScanner(os.Stdin)
-			var result bool = scanner.Scan()
+			var result = scanner.Scan()
 			if result == true {
 				// String from console.
-				var input string = scanner.Text()
+				var input = scanner.Text()
 				if port, err := strconv.Atoi(input); err == nil {
 					*portNumber = port
 					fmt.Printf("%dをListenします\n", port)
@@ -234,7 +243,7 @@ func main() {
 			}
 
 			// 新規接続クライアントオブジェクトを作成
-			var client *clientunit.ClientUnit = new(clientunit.ClientUnit)
+			var client = new(clientunit.ClientUnit)
 			client.ClientName = ""
 			client.Connection = connection
 			fmt.Printf("client オブジェクト -> %v", client)
@@ -252,57 +261,34 @@ func main() {
 }
 
 func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) error {
-	var c net.Conn = clientUnit.Connection
+	//var messageToClient string
+	var c = clientUnit.Connection
 	printf("%v", c.RemoteAddr())
-	c.Write([]byte("<< あなたのお名前を最初に入力してください >>\n"))
-	c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
+	//messageToClient = fmt.Sprintf("[%s]ようこそ\n", hostName)
+	//_, _ = c.Write([]byte(messageToClient))
+	//messageToClient = "まずあなたのお名前を最初に入力してください >>\n"
+	//_, _ = c.Write([]byte(messageToClient))
+	//var socketName string
+	//for {
+	//	socketName = server.ReadMessageFromSocket(c, 2)
+	//	if len(socketName) > 0 {
+	//		fmt.Printf("socketName => %v\n", socketName)
+	//		messageToClient = fmt.Sprintf("こんにちわ[%s]さん 楽しんでね!\n", socketName)
+	//		_, _ = c.Write([]byte(messageToClient))
+	//		break
+	//	}
+	//}
+	//c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
 	printf("読み取り開始\n")
-	if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-		panic(err)
-	}
+	//if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+	//	panic(err)
+	//}
+
 	for {
-		stackBuffer := make([]byte, 0, 1024)
-		buffer := make([]byte, 32)
-		//printf("待ち受けかいし ")
-		for {
-
-			size, err := c.Read(buffer)
-			//var opError *net.OpError
-			if err != nil {
-				//if errors.Is(err, &net.OpError{}) {
-				//	printf("IsメソッドがTrueを返す場合")
-				//}
-				//e := errors.Unwrap(err)
-				//printf("e ===> %v ]]]]\n", e)
-				//printf("エラー発生 %v ===================== \n", reflect.TypeOf(e))
-				//fmt.Printf("errors.Unwrap(err) => %v >>> \n", errors.Unwrap(err))
-				//fmt.Printf("reflect.TypeOf(err) => %v >>> \n", reflect.TypeOf(err))
-				//fmt.Printf("reflect.TypeOf(err).Comparable() ==> %v >>> \n", reflect.TypeOf(err).Comparable())
-				var ope = new(net.OpError)
-				if ok := errors.As(err, &(ope)); ok {
-				}
-				if _, ok := err.(*net.OpError); ok {
-					//fmt.Printf(" エラー時 %v\n", reflect.TypeOf(err))
-					// 型アサーション成功時<エラー型>が指定したエラーの場合
-					//fmt.Printf(" タイムアウトエラー時 %v\n", err)
-					if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-						panic(err)
-					}
-				}
-			}
-
-			buffer = buffer[:size]
-			//printf("スライシング後%v", buffer)
-			stackBuffer = append(stackBuffer, buffer...)
-			if size < 32 {
-				break
-			}
-		}
-
-		if len(stackBuffer) == 0 {
+		recievedMessage := server.ReadMessageFromSocket(c, 2)
+		if len(recievedMessage) == 0 {
 			continue
 		}
-		recievedMessage := string(stackBuffer)
 
 		if recievedMessage == "users" {
 			users := make([]string, len(clientManager.clientList))
@@ -349,11 +335,7 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 			return nil
 		} else {
 			// Print the request to the console
-			printf("%s: %s\n", clientUnit.ClientName, string(stackBuffer))
-			//printf("接続元アドレス: %s\n", fromAddress)
-			//printf("受信したデータ: %s\n", string(stackBuffer))
-			//var reply string = fmt.Sprintf("%sさんが発言しました: %s\n", clientUnit.clientName, string(stackBuffer))
-			//c.Write([]byte(reply))
+			printf("%s: %s\n", clientUnit.ClientName, recievedMessage)
 		}
 		thanksBuffer := []byte("Thanks for your message\n")
 		if _, err := c.Write(thanksBuffer); err != nil {
