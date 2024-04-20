@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -11,38 +10,20 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	. "wiredrawing/go/socket-application/clientmanager"
 	"wiredrawing/go/socket-application/clientunit"
 	"wiredrawing/go/socket-application/server"
 )
 
 var printf = fmt.Printf
 
-type ClientManager struct {
-	clientList map[net.Addr]*clientunit.ClientUnit
-}
-
-func (cm *ClientManager) addClient(refClient *clientunit.ClientUnit) (bool, error) {
-	var address = refClient.Connection.RemoteAddr()
-	if _, ok := cm.clientList[address]; ok != true {
-		cm.clientList[address] = refClient
-		return true, nil
-	}
-	return false, errors.New("クライアントは既に存在しています")
-}
-func (cm *ClientManager) removeClient(client *clientunit.ClientUnit) {
-	delete(cm.clientList, client.Connection.RemoteAddr())
-}
-func (cm *ClientManager) exists(client *clientunit.ClientUnit) bool {
-	if _, ok := cm.clientList[client.Connection.RemoteAddr()]; ok {
-		return ok
-	} else {
-		return false
-	}
-}
+//type ClientManager struct {
+//	clientList map[net.Addr]*clientunit.ClientUnit
+//}
 
 // TCPクライアントを管理する構造体を作成
 var clientManager = ClientManager{
-	clientList: make(map[net.Addr]*clientunit.ClientUnit),
+	ClientList: make(map[net.Addr]*clientunit.ClientUnit),
 }
 
 func fetchReceiveBufferFromServer(connection *net.TCPConn) {
@@ -248,13 +229,13 @@ func main() {
 			client.Connection = connection
 			fmt.Printf("client オブジェクト -> %v", client)
 
-			isExists := clientManager.exists(client)
+			isExists := clientManager.Exists(client)
 			fmt.Printf("isExists => %v\n", isExists)
 			if isExists == false {
-				clientManager.addClient(client)
+				clientManager.AddClient(client)
 			}
 			fmt.Printf("クライアントリストclientManager: %v\n", clientManager)
-			fmt.Printf("クライアントリストclientManager.clientList: %v\n", clientManager.clientList)
+			fmt.Printf("クライアントリストclientManager.clientList: %v\n", clientManager.ClientList)
 			go handlingConnection(client, hostName)
 		}
 	}
@@ -275,7 +256,7 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 			fmt.Printf("socketName => %v\n", socketName)
 			messageToClient = fmt.Sprintf("こんにちわ[%s]さん 楽しんでね!\n", socketName)
 			(*clientUnit).ClientName = socketName
-			for key, value := range clientManager.clientList {
+			for key, value := range clientManager.ClientList {
 				if key == clientUnit.Connection.RemoteAddr() {
 					// 発言者本人へのリプライ
 					_, _ = value.Connection.Write([]byte(messageToClient))
@@ -302,8 +283,8 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 		}
 
 		if recievedMessage == "users" {
-			users := make([]string, len(clientManager.clientList))
-			for address, value := range clientManager.clientList {
+			users := make([]string, len(clientManager.ClientList))
+			for address, value := range clientManager.ClientList {
 				s := fmt.Sprintf("[%s]:%s", address, value.ClientName)
 				users = append(users, s)
 			}
@@ -327,7 +308,7 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 			//}
 			//continue
 		} else {
-			for address, client := range clientManager.clientList {
+			for address, client := range clientManager.ClientList {
 				if address != clientUnit.Connection.RemoteAddr() {
 					formattedMessage := colorWrapping("33", clientUnit.ClientName+"さんが発言しました: "+recievedMessage+"\n")
 					client.Connection.Write([]byte(formattedMessage))
@@ -339,7 +320,7 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 			printf("クライアントリストから削除")
 			c.Write([]byte("ご利用ありがとうございました!!\n"))
 			// クライアントリストから削除
-			clientManager.removeClient(clientUnit)
+			clientManager.RemoveClient(clientUnit)
 			if err := c.Close(); err != nil {
 				panic(err)
 			}
