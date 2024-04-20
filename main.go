@@ -261,24 +261,35 @@ func main() {
 }
 
 func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) error {
-	//var messageToClient string
+	var messageToClient string
 	var c = clientUnit.Connection
 	printf("%v", c.RemoteAddr())
-	//messageToClient = fmt.Sprintf("[%s]ようこそ\n", hostName)
-	//_, _ = c.Write([]byte(messageToClient))
-	//messageToClient = "まずあなたのお名前を最初に入力してください >>\n"
-	//_, _ = c.Write([]byte(messageToClient))
-	//var socketName string
-	//for {
-	//	socketName = server.ReadMessageFromSocket(c, 2)
-	//	if len(socketName) > 0 {
-	//		fmt.Printf("socketName => %v\n", socketName)
-	//		messageToClient = fmt.Sprintf("こんにちわ[%s]さん 楽しんでね!\n", socketName)
-	//		_, _ = c.Write([]byte(messageToClient))
-	//		break
-	//	}
-	//}
-	//c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
+	messageToClient = fmt.Sprintf("[%s]ようこそ\n", hostName)
+	_, _ = c.Write([]byte(messageToClient))
+	messageToClient = "まずあなたのお名前を最初に入力してください >>\n"
+	_, _ = c.Write([]byte(messageToClient))
+	var socketName string
+	for {
+		socketName = server.ReadMessageFromSocket(c, 2)
+		if len(socketName) > 0 {
+			fmt.Printf("socketName => %v\n", socketName)
+			messageToClient = fmt.Sprintf("こんにちわ[%s]さん 楽しんでね!\n", socketName)
+			(*clientUnit).ClientName = socketName
+			for key, value := range clientManager.clientList {
+				if key == clientUnit.Connection.RemoteAddr() {
+					// 発言者本人へのリプライ
+					_, _ = value.Connection.Write([]byte(messageToClient))
+				} else {
+					// 本人以外へのリプライ
+					messageToClient = fmt.Sprintf("[%s]さんが入室しました\n", socketName)
+					_, _ = value.Connection.Write([]byte(messageToClient))
+				}
+			}
+			_, _ = c.Write([]byte(messageToClient))
+			break
+		}
+	}
+	c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
 	printf("読み取り開始\n")
 	//if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
 	//	panic(err)
@@ -304,17 +315,17 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 		}
 		// ClientUnit構造体のclientNameが空の場合は、クライアント名を登録
 		if len((*clientUnit).ClientName) == 0 {
-			// 名前を設定
-			(*clientUnit).ClientName = recievedMessage
-			c.Write([]byte("ようこそ" + clientUnit.ClientName + "さん\n"))
-
-			// 発信者以外のユーザーに接続開始した旨を通知
-			for address, value := range clientManager.clientList {
-				if address != clientUnit.Connection.RemoteAddr() {
-					value.Connection.Write([]byte(clientUnit.ClientName + "さんが入室しました\n"))
-				}
-			}
-			continue
+			//// 名前を設定
+			//(*clientUnit).ClientName = recievedMessage
+			//c.Write([]byte("ようこそ" + clientUnit.ClientName + "さん\n"))
+			//
+			//// 発信者以外のユーザーに接続開始した旨を通知
+			//for address, value := range clientManager.clientList {
+			//	if address != clientUnit.Connection.RemoteAddr() {
+			//		value.Connection.Write([]byte(clientUnit.ClientName + "さんが入室しました\n"))
+			//	}
+			//}
+			//continue
 		} else {
 			for address, client := range clientManager.clientList {
 				if address != clientUnit.Connection.RemoteAddr() {
