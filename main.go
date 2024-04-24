@@ -2,17 +2,18 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
+	"go-socket/clientmanager"
+	"go-socket/clientunit"
+	"go-socket/server"
 	"log"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"wiredrawing/go/socket-application/clientmanager"
-	"wiredrawing/go/socket-application/clientunit"
-	"wiredrawing/go/socket-application/server"
 )
 
 var printf = fmt.Printf
@@ -26,6 +27,9 @@ var clientManager = clientmanager.ClientManager{
 	ClientList: make(map[net.Addr]*clientunit.ClientUnit),
 }
 
+// ログイン可能なユーザーリスト
+var userList = make([]map[string]string, 16)
+
 func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 	const ByteSize = 1024
 	for {
@@ -37,21 +41,8 @@ func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 			buffer := make([]byte, ByteSize)
 			size, err := connection.Read(buffer)
 			if err != nil {
-
-				//var ms MyStruct = MyStruct{}
-				//
-				//var a myInterface = ms
-				//fmt.Println("reflect.TypeOf(a) => ", reflect.TypeOf(a))
-				//// s, ok := a.("具体的な型名")
-				//s, ok := a.(MyStruct)
-				//
-				//fmt.Println("reflect.TypeOf(ok) => ", reflect.TypeOf(ok))
-				//fmt.Println("reflect.TypeOf(s) => ", reflect.TypeOf(s))
-
-				// timeoutエラーを検出
-				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					//fmt.Printf("Timeout時間を延慶")
-					//fmt.Printf("reflect.TypeOf(err) => %v\n", reflect.TypeOf(err))
+				var netError = new(net.Error)
+				if errors.As(err, netError) && (*netError).Timeout() {
 					_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
 				} else {
 					panic(err)
@@ -70,6 +61,11 @@ func fetchReceiveBufferFromServer(connection *net.TCPConn) {
 }
 
 func main() {
+
+	// ログイン可能なユーザーリストを定義しておく
+	userList = append(userList, map[string]string{"user": "user1", "password": "password1"})
+	userList = append(userList, map[string]string{"user": "user2", "password": "password2"})
+	userList = append(userList, map[string]string{"user": "user3", "password": "password3"})
 
 	// ログファイルを作成する
 	logFile, err := os.OpenFile("./log.dat", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -249,14 +245,64 @@ func main() {
 	}
 }
 
+// authenticate ユーザー名とパスワードを認証する
+func authenticate(userName string, password string) bool {
+	var isAuthenticated = false
+	for _, user := range userList {
+		if user["user"] == userName && user["password"] == password {
+			isAuthenticated = true
+			break
+		}
+	}
+	return isAuthenticated
+}
+
+func login(c net.Conn) map[string]string {
+	var userInfo map[string]string = make(map[string]string)
+	var messageToClient string = ""
+	messageToClient = "username: "
+	_, _ = c.Write([]byte(messageToClient))
+	var userName = ""
+	for {
+		userName = server.ReadMessageFromSocket(c, 2)
+		if len(userName) > 0 {
+			break
+		}
+	}
+	userInfo["user"] = userName
+	var password = ""
+	messageToClient = "password: "
+	_, _ = c.Write([]byte(messageToClient))
+	for {
+		password = server.ReadMessageFromSocket(c, 2)
+		if len(password) > 0 {
+			break
+		}
+	}
+	userInfo["password"] = password
+	return userInfo
+}
 func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) error {
 	var messageToClient string
 	var c = clientUnit.Connection
 	printf("クライアント接続元情報[%v]\n", c.RemoteAddr())
 	messageToClient = fmt.Sprintf("[%s]ようこそ\n", hostName)
 	_, _ = c.Write([]byte(messageToClient))
-	messageToClient = "まずあなたのお名前を最初に入力してください >>\n"
-	_, _ = c.Write([]byte(messageToClient))
+
+	// 認証処理を行う ----------------------------------------------------
+	for {
+		userInfo := login(c)
+		ok := authenticate(userInfo["user"], userInfo["password"])
+		if ok == true {
+			_, _ = c.Write([]byte("認証処理に成功しました\n"))
+			break
+		}
+		_, _ = c.Write([]byte("認証処理に失敗しました."))
+		continue
+		//_ = c.Close()
+		//return errors.New("認証処理に失敗しました")
+	}
+
 	var socketName string
 	for {
 		socketName = server.ReadMessageFromSocket(c, 2)
@@ -282,10 +328,6 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 	}
 	c.Write([]byte("<< ユーザー一覧を表示する場合は、usersと入力してください >>\n"))
 	printf("読み取り開始\n")
-	//if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
-	//	panic(err)
-	//}
-
 	for {
 		recievedMessage := server.ReadMessageFromSocket(c, 2)
 		if len(recievedMessage) == 0 {
@@ -305,19 +347,7 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 			continue
 		}
 		// ClientUnit構造体のclientNameが空の場合は、クライアント名を登録
-		if len((*clientUnit).ClientName) == 0 {
-			//// 名前を設定
-			//(*clientUnit).ClientName = recievedMessage
-			//c.Write([]byte("ようこそ" + clientUnit.ClientName + "さん\n"))
-			//
-			//// 発信者以外のユーザーに接続開始した旨を通知
-			//for address, value := range clientManager.clientList {
-			//	if address != clientUnit.Connection.RemoteAddr() {
-			//		value.Connection.Write([]byte(clientUnit.ClientName + "さんが入室しました\n"))
-			//	}
-			//}
-			//continue
-		} else {
+		if len((*clientUnit).ClientName) > 0 {
 			for address, client := range clientManager.ClientList {
 				if address != clientUnit.Connection.RemoteAddr() {
 					formattedMessage := colorWrapping("33", clientUnit.ClientName+"さんが発言しました: "+recievedMessage+"\n")

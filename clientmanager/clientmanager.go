@@ -2,8 +2,8 @@ package clientmanager
 
 import (
 	"errors"
+	"go-socket/clientunit"
 	"net"
-	"wiredrawing/go/socket-application/clientunit"
 )
 
 type ClientManager struct {
