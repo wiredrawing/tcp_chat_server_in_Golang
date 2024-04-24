@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net"
 	"time"
 )
@@ -24,12 +25,17 @@ func ReadMessageFromSocket(socket net.Conn, timeout int) string {
 		// 最初にタイムアウトを設定しておく
 		size, err = socket.Read(buffer)
 		if err != nil {
-			//fmt.Printf("読み取りサイズ: %d\n", size)
-			if err, ok := err.(net.Error); ok && err.Timeout() {
-				//log.Print("タイムアウトを延長")
-				//log.Printf("タイムアウトエラーの型チェック: %T\n", err)
+			var netErr net.Error = nil
+			// Timeoutによるエラーの場合は
+			if errors.As(err, &netErr) == true && netErr.Timeout() {
 				_ = socket.SetReadDeadline(time.Now().Add(duration * time.Second))
 			}
+			////fmt.Printf("読み取りサイズ: %d\n", size)
+			//if err, ok := err.(net.Error); ok && err.Timeout() {
+			//	//log.Print("タイムアウトを延長")
+			//	//log.Printf("タイムアウトエラーの型チェック: %T\n", err)
+			//	_ = socket.SetReadDeadline(time.Now().Add(duration * time.Second))
+			//}
 		}
 		// 受け取ったbufferをまとめる
 		buffer = buffer[:size]

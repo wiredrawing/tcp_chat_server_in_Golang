@@ -1,6 +1,7 @@
 package clientmanager
 
 import (
+	"errors"
 	"net"
 	"wiredrawing/go/socket-application/clientunit"
 )
@@ -18,14 +19,14 @@ func (cm *ClientManager) AddClient(refClient *clientunit.ClientUnit) (bool, erro
 	return false, nil
 }
 
-//func (cm *ClientManager) addClient(refClient *clientunit.ClientUnit) (bool, error) {
-//	var address = refClient.Connection.RemoteAddr()
-//	if _, ok := cm.ClientList[address]; ok != true {
-//		cm.ClientList[address] = refClient
-//		return true, nil
-//	}
-//	return false, errors.New("クライアントは既に存在しています")
-//}
+func (cm *ClientManager) addClient(refClient *clientunit.ClientUnit) (bool, error) {
+	var address = refClient.Connection.RemoteAddr()
+	if _, ok := cm.ClientList[address]; ok != true {
+		cm.ClientList[address] = refClient
+		return true, nil
+	}
+	return false, errors.New("クライアントは既に存在しています")
+}
 func (cm *ClientManager) RemoveClient(client *clientunit.ClientUnit) {
 	delete(cm.ClientList, client.Connection.RemoteAddr())
 }

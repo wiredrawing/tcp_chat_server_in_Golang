@@ -8,11 +8,17 @@ type ClientUnit struct {
 	Connection net.Conn
 }
 
+// FetchClientAddress クライアントのアドレスを取得する
+func (c *ClientUnit) FetchClientAddress() net.Addr {
+	return c.Connection.RemoteAddr()
+}
+
 // FetchClientName クライアント名を取得する
 func (c *ClientUnit) FetchClientName() string {
 	return c.ClientName
 }
 
+// FetchConnection クライアントの接続情報を取得する
 func (c *ClientUnit) FetchConnection() net.Conn {
 	return c.Connection
 }

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	. "wiredrawing/go/socket-application/clientmanager"
+	"wiredrawing/go/socket-application/clientmanager"
 	"wiredrawing/go/socket-application/clientunit"
 	"wiredrawing/go/socket-application/server"
 )
@@ -22,7 +22,7 @@ var printf = fmt.Printf
 //}
 
 // TCPクライアントを管理する構造体を作成
-var clientManager = ClientManager{
+var clientManager = clientmanager.ClientManager{
 	ClientList: make(map[net.Addr]*clientunit.ClientUnit),
 }
 
@@ -77,6 +77,7 @@ func main() {
 		fmt.Printf("ログファイルが作成できませんでした %v", err)
 		os.Exit(1)
 	}
+	defer logFile.Close()
 	log.SetOutput(logFile)
 
 	// コマンドライン引数を取得
@@ -217,6 +218,7 @@ func main() {
 			}
 		}()
 
+		var serverMessagenger = false
 		for {
 			connection, err := listener.Accept()
 			if err != nil {
@@ -236,6 +238,12 @@ func main() {
 			}
 			fmt.Printf("クライアントリストclientManager: %v\n", clientManager)
 			fmt.Printf("クライアントリストclientManager.clientList: %v\n", clientManager.ClientList)
+			// サーバーからの送信処理は一度だけ実行
+			if serverMessagenger == false {
+				fmt.Printf("サーバーからのメッセージ送信処理を開始します\n")
+				go SendMessageFromServer(clientManager)
+				serverMessagenger = true
+			}
 			go handlingConnection(client, hostName)
 		}
 	}
@@ -244,7 +252,7 @@ func main() {
 func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) error {
 	var messageToClient string
 	var c = clientUnit.Connection
-	printf("%v", c.RemoteAddr())
+	printf("クライアント接続元情報[%v]\n", c.RemoteAddr())
 	messageToClient = fmt.Sprintf("[%s]ようこそ\n", hostName)
 	_, _ = c.Write([]byte(messageToClient))
 	messageToClient = "まずあなたのお名前を最初に入力してください >>\n"
@@ -253,6 +261,8 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 	for {
 		socketName = server.ReadMessageFromSocket(c, 2)
 		if len(socketName) > 0 {
+			// クライアント名を登録
+			fmt.Printf("クライアント[%s]さんが入室しました.\n", socketName)
 			fmt.Printf("socketName => %v\n", socketName)
 			messageToClient = fmt.Sprintf("こんにちわ[%s]さん 楽しんでね!\n", socketName)
 			(*clientUnit).ClientName = socketName
@@ -340,4 +350,19 @@ func handlingConnection(clientUnit *clientunit.ClientUnit, hostName string) erro
 
 func colorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
+}
+
+// SendMessageFromServer この関数はサーバーからクライアントへメッセージを送信する
+func SendMessageFromServer(clientManager clientmanager.ClientManager) {
+	input := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Printf("メッセージを入力してください on Server: ")
+		if input.Scan() {
+			var message = input.Text()
+			for _, value := range clientManager.ClientList {
+				_, _ = value.Connection.Write([]byte(message))
+				fmt.Printf("メッセージ: %v\n", message)
+			}
+		}
+	}
 }
